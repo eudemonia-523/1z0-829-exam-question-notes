@@ -1298,6 +1298,42 @@ automatic module 可以获取unnamed module, 只要添加-classpath参数就行
 11. 你可以将嵌套类的构造方法变成private或者protected，但是不能对顶层类这样做
 12. 对于顶层类来说 默认构造器的访问修饰符和类的访问修饰符一致
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ---
 
 # 第十七章 考题错题整理
@@ -1407,141 +1443,322 @@ Locale(String language, String country, String variant)
 
 ---
 
+**内部类相关**
+
+成员内部类在java 16之前是不允许拥有static方法和非静态方法的，但是16之后开始允许了
+
+如何理解静态内部类 和 外部类之间的关系：
+
+如果一个内部类被标注为静态，那就有意思了，这个静态内部类会被当做一个和顶级类一样的类进行处理。在编译之后会生成 OutterClass$InnerClass.class 从名字上有区分但是使用上几乎一样。但是它有一个比较有意思的点就是，JVM从设计上给静态内部类的访问权限开了后门，因为设计师认为虽然你现在是一个顶层类了，但是你依然是定义在别的类的内部的你和他们是一家人，所以你仍然应该包含对外部类的一定访问功能。然后就赋予了静态内部了访问外部类的private权限。同时静态类肯定可以访问外部类的static字段的（为什么呢？因为静态类是不依托于对象存在的，我虽然无法访问对象，但是非对象的东西我都可以访问）。
+
+而对于非静态的内部类，它就很不一样了。它必须依托对象存在，因为没有static修饰的类就和普通成员一样，没有对象就没有对应的属性（或者这里说的成员类）。事实上JVM会在初始化非静态内部类的时候为它添加一个引用 final Outer this$0; 指向外部类，这就是为什么它可以访问成员变量和方法的原因（注意静态内部类是没有的）
+
+而对于局部内部类和匿名内部类（匿名内部类其实就是没有名字的局部内部类，其他特点都很相似）在编译之后会生成单独的class文件，前者类似于OutterClass$LocalClass.class 而后者类似于OutterClass$1.class 同时注意局部内部类和匿名内部类在编译的时候JVM也会添加一个final Outer this$0; 用来获取当前类对象的引用，所以他们是可以访问对象的内容（甚至是private内容）的。前面是对于外部类对象属性的访问，那么对于外部方法的访问呢？这里比较有意思，因为它只能访问final或者effectively final的，因为编译初期，JVM会将方法的变量放到这个内部类当中，这样的话这些变量就必须不可变，否则会导致一些严重的后果
+
+---
+
+**JDK 命令相关**
+
+最简单最基础的命令： `javac` / `java` / `jar`
+
+`javac [options] [sourcefiles]`
 
+`java [options] class [args...]`
 
+`java [options] -jar jarfile [args...]`
 
+`jar [options] [jar-file] [manifest-file] [input-files...]`
 
+```test
+编译
+javac Hello.java								简单编译，输出class文件到当前目录
+javac -d ~/myFolder Hello.java					编译，输出class文件到指定目录
+javac -cp ~/myLibFolder/* Hello.java			编译并使用指定的类路径
+还有其他常见选项比如 -verbose显示详细编译过程 -Xlint 开启所有警告方便调试 -encoding 指定源文件编码防止乱码等...
+启动
+java Hello										简单运行某个类
+java com.example.Hello							运行某个类（含包名）
+java -cp .:myLib/*:myOtherLib/* Hello			运行某个类并指定类路径
+java --module-path myMods -m mymodule/com.example.Hello.Main 运行java程序并指定模块路径和模块主类
+还有其他常见选项比如 -Xms 指定JVM初始堆大小 -Xmx 指定JVM最大堆大小 -XshowSettings 显示JCM的配置信息
+打包
+jar cf app.jar *.class 							打包并创建新的jar文件
+jar uf app.jar NewClass.class					打包并更新已有jar
+jar tf app.jar									列出jar的内容
+jar cvf app.jar *.class							打包并列出详细信息
+jar cfe app.jar com.example.Main *.class 		打包并指定可执行的主程序入口
+引入模块之后传统的编译和运行命令可能会发生变化，比如以前通过classpath编译现在要通过modulepath编译了
+java -p mods:lib -m my.module/com.example.Main
+javac --module-path mods -d feeding feeding/zoo/animal/feeding/*.java feeding/module-info.java
+java --module-path mods --module book.module/com.sybex.OCP  其中mods是依赖存放的地方，book.module是module的名字com.sybex是包名
+java --module-path feeding --module zoo.animal.feeding/zoo.animal.feeding.Task  打jar成功之后可以在执行的时候直接使用jar
+jar -cvf mods/zoo.animal.feeding.jar -C feeding/ .  打开feeding文件夹，把里面所有内容打包成指定的jar
+```
+
+虽然编译和运行就能跑起来程序了，但是你需要把他打成jar方便发送给其他人使用，一般来说打包不会把依赖的其他lib打进去，所以其他人在使用的时候仍然需要下载所有的lib才能运行，你当然也可以使用maven工具，这样pom文件里定义了哪些依赖是你需要去下载的。同时你也可以使用maven插件让其打包的时候打一个很大的胖jar，就是把所有的依赖都打进去，这样客户直接使用这个jar而不需要下载任何依赖。
+
+现在的商业使用，镜像相比jar听到的更多，因为一个微服务会在docker file中定义一个镜像的具体细节，一个单纯的jar并不能直接运行，你可能会配置一些环境 数据库之类的，都在docker file中定义。 镜像才算是一个能够完全单独运行的总和
 
+---
 
+**Module相关**
 
+上一话题之后可以再具体看一下module相关知识：
 
+```
+一次性编译两个package，这里使用同一个依赖位置，指明了两个package下的java文件，指定同一个module-info，这里的module-info里名字的定义可以理解为这两个package共同的部分，module-info认为是自己规定了这个名称下的所有包的封装配置
+javac -p mods -d care care/zoo/animal/care/details/*.java care/zoo/animal/care/medical/*.java care/module-info.java
 
+```
 
+```text
+module-info:
+exports zoo.animal.talks.media;						普通的导出
+exports zoo.animal.talks.content to zoo.staff;		导出到具体的包内使用，其他包无该权限
+module并不破坏原有的访问修饰符特性，比如private导出了依旧无法在其他地方使用，package修饰符的导出后仍然无法在其他包使用
+requires zoo.animal.feeding;						普通的依赖
+requires transitive zoo.animal.feeding;				依赖它以及它自己的所有依赖，这里意味着使用传递式的依赖
+注意重复依赖会报错，比如 requires A 之后又 requires transitive A 是不合法的
+opens zoo.animal.talks.schedule; 					开放反射权限
+opens zoo.animal.talks.media to zoo.staff;			对特定的包开放反射权限
+如果你希望在暴露接口给别人的同时赋予别人动态寻找实现类的功能，可以使用 uses，目的是为了隐藏实现
+module zoo.tours.reservations {
+	exports zoo.tours.reservations; 
+	requires zoo.tours.api;
+    uses zoo.tours.api.Tour;
+}
+ServiceLoader<Tour> loader = ServiceLoader.load(Tour.class);
+服务提供方 provides interfaceName with className 
+provides zoo.tours.api.Tour with zoo.tours.agency.TourImpl;
+```
 
+```
+java -p mods --describe-module zoo.animal.feeding		描述模块结构
+java --list-modules										列出可用模块，现在JDK有至少70个
+java -p mods --list-modules								列出该路径的可用模块，会包含JDK的
+jar --file mods/zoo.animal.feeding.jar --describe-module描述模块，跟第一个稍有区别
+jdeps zoo.dino.jar										描述依赖，在没有完全模块化的时候很有用
+jdeps --jdk-internals zoo.dino.jar						描述依赖，提供调用内部API时候的更多细节
+jmod 													用来跟jmod文件打交道，真实场景很少用，可能会涉及到一些原生功能
+jlink --module-path mods --add-modules zoo.animal.talks --output zooApp		创建一个最小的发行版
+```
 
+不同类型的Module:
+前面提到的这种拥有module-info 的module是*named module* 它在module path而不是 classpath上
+*automatic module* 是指没有module-info 但是仍然在module path上的，java会自动为其使用一个module name。代码也会当作正常module来使用
+*unnamed module* 不在module path 只在 classpath上 且通常是没有module-info的，如果有也会被忽略
 
+自底向上：从最底下也就是不依赖其他jar的jar开始，为其添加module-info 写清楚requires和exports，从classpath移动到modulepath，往上进行
+自顶向下：把所有jar都移动到module path下变成automatic module,然后从最顶端添加module-info写清楚requires/exports.往下进行
 
+自底向上最简单，但是有时候你依赖了第三方的jar如果没有迁移就比较困难，这个时候用自顶向下比较方便
 
+拆解项目：把依赖分类并且画出依赖关系，必要是要通过引入其他module来解除循环依赖，最后再进行迁移
 
+---
 
+**并发**
 
+我们正常情况下编写的java程序，由程序员创建的就只有一个线程，它会启动并执行main方法。但是JVM会在后台启动一些守护线程进行垃圾回收内存分配之类的工作。那么一个java web程序是怎样的呢？拿springboot 举例，它内置了一个tomcat 服务器，这个服务器的线程池会为到来的每一个请求单独调配一个线程去响应，这个线程池默认是200的上限，你也可以调整这个值，但是要注意你的服务器的负载能力。由于不同的请求由不同的线程去处理，你要考虑好并发的问题，考虑共享资源的访问。对于有一些资源如果每一个线程进来都要创建的话可能造成负载重响应慢，这种时候我们可能考虑单例模式，就是创建一个对象供给所有线程使用，而spring的service和controller都是这样一种模式（想象一下如果不用单例，那么每个请求都要创建和初始化一套会浪费很多時間）所以处理共享资源的访问几乎是不可避免的
 
+可以使用Thread.sleep(1000) 来暂停当前线程的执行，也可以通过myThread.interrupt(); 来将指定线程加入就绪状态
 
+使用ExecutorService 接口可以方便我们管理线程
 
+```java
+ExecutorService service = Executors.newSingleThreadExecutor();
+service.execute(printInventory);  //传入Runnable instance
+service.shutdown(); service.shutdownNow(); //前者拒绝新增的task但是后者可以终端正在执行的task
+service.execute(); service.submit();  //前者执行了无法获取结果但是后者会返回一个Future实例
+service.isShutdown(); service.isTerminated(); //前者看你是否执行了shutdown但是后者会看你是否真的结束运行了
+ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor(); //子接口用来执行定时任务
+Excutors.newCachedThreadPool();		//按需创建无上限的线程并且可以复用，适合大量小任务
+Excutors.newFixedThreadPool(int);	//创建定量的线程，如果新任务进来会进queue等待
+Excutors.newScheduledThreadPool(int) //核心线程固定，非核心线程可以无限制创建
+```
 
+volatile 可以保证可见性和防止指令重排，但是无法保证原子性。原子性可以通过使用原子类来达到比如 AtomicInteger
 
+synchronized 锁可以锁对象和方法，锁上之后所有线程都需要获取锁才能执行临界区代码。锁静态方法的话其实锁的是类对象，也就是说整个应用只能同时存在一个线程在调用该方法，锁实例方法则是锁的实例对象，也就是说如果两个线程使用两个实例对象的话，他们是有可能同时调用这个方法的。
 
+Lock 和 synchronized 一样是作为一个锁的功能，但是他控制更简单，拥有跟多类似通知的功能，比如你想知道这个锁现在是否正在被使用。Ｌock锁是锁的对象还是类要看你的lock定义是什么样的，因为它锁的是lock对象，但是lock对象可能是类级别的也可能是实例级别的
 
+```java
+Lock lock = new ReentrantLock();try { lock.lock();
+ // Protected code
+} finally {
+ lock.unlock();
+}
+```
 
+并发使用的集合类：在多线程情况下你使用非并发类会导致读写一致性问题，就好像你i++的那个例子一样，为了不要出现一致性问题，通常有两种方式：
+1.使用并发集合类：ConcurrentHashMap / ConcurrentLinkedQueue / ConcurrentSkipListMap / ConcurrentSkipListSet / CopyOnWriteArrayList / CopyOnWriteArraySet / LinkedBlockingQueue 其中skip可以理解为sorted，copyOnWrite 会在更新的时候创建一个新的copy
+2.使用同步方法synchronizedCollection / synchronizedList / synchronizedMap 通常用这样的方法去获得并发集合类
 
+---
 
+**Stream**
 
+1. Optional 首先是相关的几个方法，比如 opt.get() opt.ifPresent() opt.isPresent() 之类的
 
+2. Stream的创建可以用工厂方法，也可以从collection之类的转换过来 比如 list.stream() list.parallelStream()
 
+3. 流的使用是一次性的，一旦使用了归约就不能再进行链式调用了
 
+4. 常见终端操作的方法和使用
 
+   1. count() 计算流中元素个数，归约操作
+   2. min( Comparator <? supert T> comparator ) 计算最小值，判断大小是通过传入的lambda来的，max同理
+   3. findAny() / findFirst() 找到就返回这个元素，顺序流通常是第一个，并行流可能是任意一个
+   4. anyMatch(Predicate <? super T> predicate)  通过你给的条件来判断是否有匹配项，allMatch noneMatch 同理
+   5. forEach(Consumer<? super T> action) 对每一个元素执行操作
+   6. reduce(BinaryOperator<T> accumulator) 最核心的归约操作，可以定义一个初始值
+   7. collect(Collector<? super T, A,R> collector) 终端操作，将流输出到一个容器当中，通常跟Collector 工具类一起使用
 
+5. 常见中间操作的方法和使用
 
+   1. filter(Predicate<? super T> predicate)  通过true/false来过滤，会返回一个新的stream
+   2. distinct() 去掉重复元素
+   3. limit(long maxSize) 只保留前N个元素
+   4. skip(long n) 跳过前N个元素只保留后面的元素
+   5. map(Function<? super T, ? extends R> mapper) 对每一个元素进行转换，和foreach区别在于这个返回新流而foreach直接终止流
+   6. flatMap( Function<? super T, ? extends Stream<? extends R>> mapper) 跟上一个比较像，用来处理元素包含集合或流的情况
+   7. sorted(Comparator<? super T> comparator) 用来排序
+   8. peek(Consumer<? super T> action) 对每个元素进行观察，和map的区别是这里是观察而map是改变
 
+6. 关于基本数据类型流比如 IntStream 的出现是为了避免 Stream<Integer> 这样很大的装箱拆箱开销，而且这个流有更多的定制方法
 
+7. 关于基本数据类型的Optional比如OptionalDouble 是同样的问题，可以看作高效版本的 Optional<Double> 。
 
+8. 类似IntSummaryStatistics 这样的类 可以通过getCount() 这样简单的方式获得基本数据类型的求和/平均值/最大最小值等方法
 
+9. 之前提到的Collector 有很多方法进行分组分类比如：
 
+   ```java
+   Map<String, List<Employee>> byDept = employees.stream().collect(Collectors.groupingBy(Employee::getDepartment));
+   ```
 
+---
 
+**File**
 
+**File** → 旧的类，路径抽象（`java.io`）但是不够灵活，方法很有限
 
+**Path** → 新的路径抽象接口（`java.nio.file`） 相当于一个**路径抽象**，可以是文件、目录，甚至不存在的路径
 
+**Paths** → 工具类，用来创建 `Path` 对象 提供**工厂方法**来创建 `Path` 对象
 
+**Files** → 工具类，用来操作 `Path` 对应的文件 包含大量 **静态方法**，用来对 `Path` 表示的文件或目录执行操作。
 
+File 有时指代的是 file & directory 因为他们在java中被视作一种东西就是file， 同样的方法即可以操作file又可以操作 directory。 而path 就是File & Directory 的抽象路径，注意不同的操作系统路径表达的区别
 
+关于windows考题的斜杠问题：
 
+Windows 系统路径用 `\`
 
+Java 字符串里 `\` 要写成 `\\`
 
+打印出来或 API 处理后还是单个 `\`
 
+最推荐写法：在 Java 里用 `/`，跨平台无压力
 
+```java
+File file = new File("/home/test.txt");
+Path path1 = Path.of("/home/test.txt");
+Path path2 = Paths.get("/home/test.txt");
+path.toFile();  file.toPath();
 
+```
 
+注意这个章节一般复数类是用来操作单数类的，比如： Paths Path / FileSystems FileSystem / Files Path /
 
+给我的感觉很像是：以前用file这个类干很多事情，现在拆分成了： 抽象出来一个path， 操作都用Files 去操作path
 
+Files 在操作的时候 可以添加一些 LinkOption参数 达到更灵活的目的比如 NOFOLLOW_LINKS 之类的
 
+```java
+path.resolve(""); 
+path.getNameCount();
+path.getName(0);
+path.subpath(0,2);// 左闭右开
+path.resolve("/first/second"); // 这里使用了绝对路径，所以最后结果还是这个路径,如果事相对路径就把它追加在path后面
+path.relativize(path1); //这里有点抽象，注意我们当前在path的内部，考虑是否要回到path和path1同级目录
+path.normalize();//去掉中间没意义的../之类的
+path.toRealPath(); //可以将一些链接转化出来
+//这些事path的方法，还有files的方法，太麻烦了懒得再去列出来了
+```
 
+接下来看字符流字节流
 
 
 
+## 2.正篇
 
+123先放着稍后复习
 
+### 第四套
 
+第一题 读题不仔细，选择选项的时候注意选择最合理的，虽然可能很多选项都是对的。sealed class A permits B 如果B不继承，则两个类都会编译出错
 
+第五题 要注意经典的不可变类，instant 是不可变的，对它进行加减如果不重新赋值引用，原对象不会发生改变
 
+第六题 考察RandomAccessFile 类，它它允许你对随机访问文件进行 读写操作 随机访问文件的行为就像存储在文件系统中的一个大型字节数组。在这个“数组”中有一个类似光标或索引的东西，称为 文件指针。文本末尾添加直接用length方法。它支持r/rw/rws/rwd
 
+第七题 考察callable 相关，记住Future是接口所以new Future<String> 作为返回是错误的
 
+第八题 考察垃圾回收，调用System.gc() 是告诉JVM可以垃圾回收了但不一定立刻执行。只要obj被重新赋值为null那么就意味着老的对象没有引用了，被标记为可回收
 
+第十题 读题要仔细，接口无法实现接口，然后如果一个方法返回值是short但是你返回字面量0是合法的，虽然表面看起来没有强制转换要报错，但是字面量而且完全在short的区间内就会自动进行类型转换，不会报错。java17的接口支持 default/static/private/private static 不支持protected/final方法
 
+第11题： 注意path.getName(1) 在计算的时候 C:// D:// 都不算，要从他们后面开始算0号元素
 
+第12题：stream可能会考到 lambda使用外部变量求和，这个时候外部变量可能不是final或者effective final 就会编译错误
 
+第13题 Collection.sort(param1,param2) 如果param2 不传就是说使用默认排序方法，调用集合的compareTo ，但是不同类型无法一起compareTo 会编译错误
 
+第15题 强化 path.resolve方法，注意startsWith 传入string的话要完全匹配，不要忽略了 / 或者C:\\\\
 
+第18题 module-info不能为空，如果缺失这个文件，并不会从class的名字去推断它，如果放在module path 就是automatic module 从jar的名字去推断。 module-info.java 同样会被编译成 class 文件
 
+第19题 Arrays.compare(a,b) 如果b是a的前缀，那么compare会返回 他们之间差异个数的正值，mismatch 会返回第一个不同的index
 
+第25题 静态内部类不需要先 new 外部类，有时候做题要考虑到 静态引入外部类的静态类，那么就更简单了 直接 new Inner() 
 
+第27题， console的创建失败并不会报错只会返回null，所以不需要声明异常
 
+第30题 **记得去复习day time 这个东西**
 
+第31题 枚举的构造方法只能是私有的，因为要保持枚举常量的唯一性，不让其他人随意的构造枚举对象
 
+第32题 a += (a = 4); 这样的题先展开再从前往后做，在做到赋值之前都不受赋值影响，赋值之后的就要受到赋值的影响了
 
+第36题 boolean 不能作为switch表达式或者语句的判断（有点反直觉。。。）
 
+第37题 RandomAccessFile 没有 writeString 方法，有 writeUTF方法
 
+第38题 **强化一下 Locale 的知识**
 
+第39题 考察 stream 的terminal 方法比如 foreach 如果没有这种方法，那么链式调用的中间方法都不会执行
 
+第40题 stringbuilder 没有setCapacity 方法只有 ensureCapacity 方法
 
+第41题 **重新复习bundle 相关知识**
 
+第43题 初始化一个数组的时候你不能既指定 长度 又指定内容
 
+第44题 case 后面跟的是一个值去作比较，而不是直接让你写表达式去作比较，写表达式会返回true 和false
 
+第45题 stream 相关，有点意思，再看一遍
 
+第47题 注意 module-info 里面不能有通配符*
 
+第48题 跟32有点像，这种运算 先计算等号左边，再计算右边，如果右边有等号再计算其左边和右边，不要让右边的赋值影响到你对前面的判断
 
+第50题 LocalDate 的打印是像这样的： 2022-02-14
 
+第55题 考察 database 的 resultset 的方法 比如 getString getInt
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+### 第五套
 
 
 
